@@ -134,9 +134,12 @@ curl -N -X POST http://localhost:3456/v1/chat/completions \
 |----------|-------|-----------|
 | `claude-opus-4` | `opus` | Claude Opus |
 | `claude-sonnet-4` | `sonnet` | Claude Sonnet |
+| `claude-sonnet-5` | — | Claude Sonnet 5 (explicit, pinned) |
 | `claude-haiku-4` | `haiku` | Claude Haiku |
 
-All model IDs also accept a `claude-code-cli/` prefix (e.g., `claude-code-cli/claude-opus-4`). Unknown models default to Opus.
+All model IDs also accept a `claude-code-cli/` prefix (e.g., `claude-code-cli/claude-opus-4`).
+
+**Explicit version pinning (this fork):** requesting an explicit versioned Claude id — `claude-<family>-<version>`, e.g. `claude-sonnet-5` — passes it straight through to the CLI's `--model`, so you pin an exact version instead of a drifting bare alias (`sonnet` currently resolves to `claude-sonnet-5`). Bare aliases (`opus`/`sonnet`/`haiku`) still work; other unknown models default to Opus.
 
 ## Configuration with Popular Tools
 
