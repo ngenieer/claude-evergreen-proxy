@@ -1,6 +1,6 @@
-# Claude Max API Proxy
+# Claude Evergreen Proxy
 
-> Actively maintained fork of [atalovesyou/claude-max-api-proxy](https://github.com/atalovesyou/claude-max-api-proxy) with OpenClaw integration, improved streaming, and expanded model support.
+> A self-updating fork of [atalovesyou/claude-max-api-proxy](https://github.com/atalovesyou/claude-max-api-proxy) (via [wende](https://github.com/wende/claude-max-api-proxy)). Its model registry **discovers** the CLI's current models, **probes** them, and **refreshes daily** — so the model list stays current with no hardcoded names and no manual updates. (Plus OpenClaw integration and improved streaming from upstream.)
 
 **Use your Claude Max subscription ($200/month) with any OpenAI-compatible client — no separate API costs!**
 
@@ -67,8 +67,8 @@ Your App (OpenClaw, Continue.dev, etc.)
 
 ```bash
 # Clone the repository
-git clone https://github.com/wende/claude-max-api-proxy.git
-cd claude-max-api-proxy
+git clone https://github.com/sizlon/claude-evergreen-proxy.git
+cd claude-evergreen-proxy
 
 # Install dependencies
 npm install
