@@ -1,17 +1,26 @@
-# Claude Max API Proxy
+# Claude Evergreen Proxy
 
-OpenAI-compatible API proxy that wraps the Claude Code CLI.
+OpenAI- and Anthropic-compatible API proxy that wraps the Claude Code CLI.
 
-## Build
+## Build & Test
 
 ```bash
-npm run build    # Compile TypeScript
-npm run dev      # Watch mode for development
+npm run build     # Compile TypeScript
+npm run dev       # Watch mode for development
+npm test          # Unit tests (pure functions, free)
+npm run test:e2e  # End-to-end tests — calls the REAL Claude CLI and burns tokens
 ```
 
 ## Service Management
 
-The proxy runs as a macOS LaunchAgent on port 3456.
+**Linux:** systemd user unit `claude-evergreen-proxy` — see `docs/linux-setup.md`.
+
+```bash
+systemctl --user restart claude-evergreen-proxy
+journalctl --user -u claude-evergreen-proxy -f
+```
+
+**macOS:** the proxy runs as a LaunchAgent on port 3456.
 
 **Plist location:** `~/Library/LaunchAgents/com.openclaw.claude-max-proxy.plist`
 
@@ -56,6 +65,15 @@ launchctl list com.openclaw.claude-max-proxy
 - `src/types/openai.ts` - OpenAI-compatible API types
 - `src/adapter/openai-to-cli.ts` - Converts OpenAI requests to CLI input
 - `src/adapter/cli-to-openai.ts` - Converts CLI output to OpenAI responses
+- `src/adapter/anthropic-to-cli.ts` - Converts Anthropic Messages requests to CLI input
+- `src/adapter/cli-to-anthropic.ts` - Converts CLI output to Anthropic responses
 - `src/subprocess/manager.ts` - Spawns and manages Claude CLI subprocesses
+- `src/models.ts` - Self-updating model registry (discover, probe, daily refresh)
+- `src/server/index.ts` - Express setup, opt-in CORS, optional API-key auth
 - `src/server/routes.ts` - Express route handlers (streaming + non-streaming)
-- `src/server/standalone.js` - Server entry point
+- `src/server/standalone.ts` - Server entry point (`claude-evergreen` bin)
+
+## Conventions
+
+- CLI failures arrive as a `result` message with `is_error: true` and **exit code 0** — always check the flag, never the exit code, when detecting errors.
+- No hardcoded model version ids anywhere (tests included); bare family aliases (`opus`/`sonnet`/`haiku`/`fable`) are the only acceptable literals.

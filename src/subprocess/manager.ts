@@ -201,10 +201,14 @@ export class ClaudeSubprocess extends EventEmitter {
       "--model",
       options.model, // Model alias (opus/sonnet/haiku)
       "--no-session-persistence", // Don't save sessions
-      "--append-system-prompt",
-      OPENCLAW_TOOL_MAPPING_PROMPT,
       // Prompt is passed via stdin (avoids E2BIG on large inputs)
     ];
+
+    // The OpenClaw tool-name mapping costs a few hundred tokens per request and
+    // only helps OpenClaw clients — set CLAUDE_PROXY_OPENCLAW=0 to drop it.
+    if (process.env.CLAUDE_PROXY_OPENCLAW !== "0") {
+      args.push("--append-system-prompt", OPENCLAW_TOOL_MAPPING_PROMPT);
+    }
 
     if (options.sessionId) {
       args.push("--session-id", options.sessionId);

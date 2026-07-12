@@ -11,6 +11,7 @@
 import { describe, it, before, after } from "node:test";
 import assert from "node:assert/strict";
 import { startServer, stopServer } from "./server/index.js";
+import { resolveModels } from "./models.js";
 import type { Server } from "http";
 import type { AddressInfo } from "net";
 
@@ -47,25 +48,18 @@ describe("health and models", () => {
     assert.ok(body.timestamp);
   });
 
-  it("GET /v1/models lists all model IDs", async () => {
+  it("GET /v1/models mirrors the live registry and is never empty", async () => {
     const res = await fetch(`${baseUrl}/v1/models`);
     assert.equal(res.status, 200);
     const body = await res.json() as any;
     assert.equal(body.object, "list");
     assert.ok(Array.isArray(body.data));
 
+    // The registry is discovered/probed at runtime (or bare-alias fallback), so
+    // assert against resolveModels() rather than any hardcoded lineup.
     const ids = body.data.map((m: any) => m.id);
-    for (const expected of [
-      "claude-opus-4",
-      "claude-opus-4-6",
-      "claude-sonnet-4",
-      "claude-sonnet-4-5",
-      "claude-sonnet-4-6",
-      "claude-haiku-4",
-      "claude-haiku-4-5",
-    ]) {
-      assert.ok(ids.includes(expected), `missing model ${expected}`);
-    }
+    assert.deepEqual(ids, resolveModels());
+    assert.ok(ids.length > 0, "model list must never be empty");
 
     for (const model of body.data) {
       assert.equal(model.object, "model");
@@ -100,7 +94,7 @@ describe("non-streaming completion", { timeout: TEST_TIMEOUT }, () => {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        model: "claude-haiku-4",
+        model: "haiku",
         stream: false,
         messages: [
           {
@@ -159,6 +153,24 @@ describe("non-streaming completion", { timeout: TEST_TIMEOUT }, () => {
     const body = await res.json() as any;
     assert.ok(body.choices[0].message.content.length > 0);
   });
+
+  it("maps a CLI model rejection to an HTTP error, not a fake completion", async () => {
+    const res = await fetch(`${baseUrl}/v1/chat/completions`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        model: "claude-bogus-99",
+        stream: false,
+        messages: [{ role: "user", content: "hi" }],
+      }),
+    });
+
+    assert.ok(res.status >= 400, `expected an error status, got ${res.status}`);
+    const body = await res.json() as any;
+    assert.ok(body.error, "expected an error body");
+    assert.ok(body.error.message.length > 0);
+    assert.equal(body.choices, undefined, "must not look like a completion");
+  });
 });
 
 // ─── Streaming completion ───────────────────────────────────────────
@@ -169,7 +181,7 @@ describe("streaming completion", { timeout: TEST_TIMEOUT }, () => {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        model: "claude-haiku-4",
+        model: "haiku",
         stream: true,
         messages: [
           {

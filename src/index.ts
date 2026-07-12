@@ -22,13 +22,10 @@ interface ModelDef {
 
 /**
  * Model list for the plugin config, derived from the live registry (resolveModels:
- * env > models.json). Falls back to bare aliases — which never go stale — when the
- * registry has not been populated yet. No hardcoded lineup here.
+ * env > models.json > bare-alias fallback). Never empty, no hardcoded lineup here.
  */
 function availableModels(): ModelDef[] {
-  const ids = resolveModels();
-  const list = ids.length ? ids : ["opus", "sonnet", "haiku"];
-  return list.map((id) => ({ id, name: id, reasoning: /opus/.test(id) }));
+  return resolveModels().map((id) => ({ id, name: id, reasoning: /opus/.test(id) }));
 }
 
 function defaultModelId(): string {
@@ -239,4 +236,3 @@ export default claudeCodeCliPlugin;
 // Also export server utilities for standalone use
 export { startServer, stopServer, getServer } from "./server/index.js";
 export { ClaudeSubprocess, verifyClaude, verifyAuth } from "./subprocess/manager.js";
-export { sessionManager } from "./session/manager.js";

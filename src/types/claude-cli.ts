@@ -74,6 +74,8 @@ export interface ClaudeCliResult {
   type: "result";
   subtype: "success" | "error";
   is_error: boolean;
+  /** HTTP status from the upstream API when the CLI run failed (e.g. 404 for an unknown model). */
+  api_error_status?: number;
   duration_ms: number;
   duration_api_ms: number;
   num_turns: number;

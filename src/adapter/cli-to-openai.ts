@@ -63,6 +63,30 @@ export function createDoneChunk(requestId: string, model: string): OpenAIChatChu
 }
 
 /**
+ * OpenAI-style usage from a CLI result. OpenAI's prompt_tokens covers the whole
+ * input, whereas the CLI (Anthropic-style) splits cache reads/writes into
+ * separate fields — fold them back in so prompt_tokens isn't misleadingly ~0
+ * on cache hits.
+ */
+export function openaiUsage(result: ClaudeCliResult): {
+  prompt_tokens: number;
+  completion_tokens: number;
+  total_tokens: number;
+} {
+  const u = result.usage;
+  const promptTokens =
+    (u?.input_tokens || 0) +
+    (u?.cache_read_input_tokens || 0) +
+    (u?.cache_creation_input_tokens || 0);
+  const completionTokens = u?.output_tokens || 0;
+  return {
+    prompt_tokens: promptTokens,
+    completion_tokens: completionTokens,
+    total_tokens: promptTokens + completionTokens,
+  };
+}
+
+/**
  * Convert Claude CLI result to OpenAI non-streaming response
  */
 export function cliResultToOpenai(
@@ -97,12 +121,7 @@ export function cliResultToOpenai(
         finish_reason: "stop",
       },
     ],
-    usage: {
-      prompt_tokens: result.usage?.input_tokens || 0,
-      completion_tokens: result.usage?.output_tokens || 0,
-      total_tokens:
-        (result.usage?.input_tokens || 0) + (result.usage?.output_tokens || 0),
-    },
+    usage: openaiUsage(result),
   };
 }
 

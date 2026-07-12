@@ -4,7 +4,7 @@
  * The advertised list (GET /v1/models) is resolved from:
  *   1. CLAUDE_PROXY_MODELS env var (comma/space separated) — pins the list
  *   2. models.json — written by discovery+probing (see below), refreshed daily
- *   3. [] — empty until populated
+ *   3. bare family aliases (opus/sonnet/haiku/fable) — until discovery populates
  *
  * The candidate ids are DISCOVERED from the CLI itself (it knows its own current
  * lineup and omits retired models), then each is PROBED (actually invoked) so only
@@ -51,11 +51,19 @@ function readModelsFile(): ModelsFile | null {
   return null;
 }
 
-/** Advertised model list: env var > models.json > empty. */
+/**
+ * Bare family aliases the CLI always resolves to its current model. Used only
+ * as the advertised-list fallback before discovery has populated models.json —
+ * they never go stale, so this does not reintroduce hardcoded model *versions*.
+ */
+export const FALLBACK_MODELS = ["opus", "sonnet", "haiku", "fable"];
+
+/** Advertised model list: env var > models.json > bare-alias fallback. */
 export function resolveModels(): string[] {
   const env = process.env.CLAUDE_PROXY_MODELS;
   if (env && parseList(env).length) return parseList(env);
-  return readModelsFile()?.models ?? [];
+  const cached = readModelsFile()?.models;
+  return cached?.length ? cached : [...FALLBACK_MODELS];
 }
 
 function writeModels(models: string[]): void {

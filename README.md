@@ -38,14 +38,15 @@ Your App (OpenClaw, Continue.dev, etc.)
 
 - **OpenAI-compatible API** — `POST /v1/chat/completions` for any OpenAI client
 - **Anthropic-compatible API** — `POST /v1/messages` (Messages API) for any Anthropic client
-- **Streaming support** — Server-Sent Events for both endpoints
-- **Multiple models** — Claude Opus, Sonnet, and Haiku with flexible model aliases
-- **OpenClaw integration** — Automatic tool name mapping and system prompt adaptation
+- **Streaming support** — Server-Sent Events for both endpoints (the OpenAI endpoint streams token-by-token; the Anthropic endpoint emits the spec-compliant event sequence once the result is complete)
+- **Self-updating model list** — discovered from the CLI and probed daily; bare aliases (`opus`/`sonnet`/`haiku`/`fable`) always work
+- **Honest errors** — CLI failures (e.g. unknown/retired model) surface as proper HTTP errors, not fake completions
+- **OpenClaw integration** — Automatic tool name mapping and system prompt adaptation (disable with `CLAUDE_PROXY_OPENCLAW=0`)
 - **Content block handling** — Proper text block separators for multi-block responses
-- **Session management** — Maintains conversation context via session IDs
-- **Auto-start service** — Optional LaunchAgent for macOS
+- **Optional API key** — set `CLAUDE_PROXY_API_KEY` to require auth on `/v1` routes
+- **Auto-start service** — LaunchAgent on macOS, systemd user unit on Linux
 - **Zero configuration** — Uses existing Claude CLI authentication
-- **Secure by design** — Uses `spawn()` to prevent shell injection
+- **Secure by design** — `spawn()` (no shell interpretation), localhost-only binding, CORS off by default
 
 ## What's Different from the Original
 
@@ -94,6 +95,8 @@ The server runs at `http://localhost:3456` by default. Pass a custom port as an 
 node dist/server/standalone.js 8080
 ```
 
+Run `node dist/server/standalone.js --help` for all commands and environment variables. (Installed globally, the same entry point is available as `claude-evergreen`.)
+
 ### Test it
 
 ```bash
@@ -107,7 +110,7 @@ curl http://localhost:3456/v1/models
 curl -X POST http://localhost:3456/v1/chat/completions \
   -H "Content-Type: application/json" \
   -d '{
-    "model": "claude-sonnet-4",
+    "model": "sonnet",
     "messages": [{"role": "user", "content": "Hello!"}]
   }'
 
@@ -115,7 +118,7 @@ curl -X POST http://localhost:3456/v1/chat/completions \
 curl -N -X POST http://localhost:3456/v1/chat/completions \
   -H "Content-Type: application/json" \
   -d '{
-    "model": "claude-sonnet-4",
+    "model": "sonnet",
     "messages": [{"role": "user", "content": "Hello!"}],
     "stream": true
   }'
@@ -147,7 +150,7 @@ The CLI has no machine-readable model list, so the proxy **discovers** ids from 
 
 1. **`CLAUDE_PROXY_MODELS`** env var — comma/space separated, e.g. `CLAUDE_PROXY_MODELS="claude-opus-4-8,claude-sonnet-5"`. Pins the list and disables auto-refresh.
 2. **`models.json`** — the discovered+probed cache (git-ignored; environment-specific).
-3. empty — until one of the above is populated.
+3. bare family aliases (`opus`/`sonnet`/`haiku`/`fable`) — until discovery populates the cache, so clients that require a model list work from the first request.
 
 **Auto-refresh:** on server start, if `models.json` is missing or older than a day, the proxy discovers+probes in the background and writes it, then re-checks once per day. The list self-updates as models are retired/added, with zero hardcoded names. (No-op when pinned via `CLAUDE_PROXY_MODELS`.)
 
@@ -177,7 +180,7 @@ Add to your Continue config:
   "models": [{
     "title": "Claude (Max)",
     "provider": "openai",
-    "model": "claude-sonnet-4",
+    "model": "sonnet",
     "apiBase": "http://localhost:3456/v1",
     "apiKey": "not-needed"
   }]
@@ -195,12 +198,37 @@ client = OpenAI(
 )
 
 response = client.chat.completions.create(
-    model="claude-sonnet-4",
+    model="sonnet",
     messages=[{"role": "user", "content": "Hello!"}]
 )
 ```
 
-## Auto-Start on macOS
+## Configuration (environment variables)
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `CLAUDE_PROXY_MODELS` | unset | Pin the advertised model list (comma/space separated); disables auto-refresh |
+| `CLAUDE_PROXY_MODELS_FILE` | `./models.json` | Where the discovered model cache lives |
+| `CLAUDE_PROXY_API_KEY` | unset | If set, `/v1` routes require it via `Authorization: Bearer <key>` or `x-api-key` |
+| `CLAUDE_PROXY_CORS` | off | `1` enables permissive CORS (see [Security](#security)) |
+| `CLAUDE_PROXY_OPENCLAW` | on | `0` skips the OpenClaw tool-mapping system prompt (~a few hundred tokens/request) |
+| `CLAUDE_BIN` | `claude` | Path to the Claude Code CLI binary |
+| `DEBUG` / `DEBUG_SUBPROCESS` | off | Verbose request / subprocess logging |
+
+## Limitations
+
+- OpenAI/Anthropic request parameters that the CLI does not expose — `max_tokens`, `temperature`, `top_p`, penalties, etc. — are accepted but **ignored**.
+- Client-defined tools (`tools` / function calling) are not forwarded; the CLI runs its own internal tools and returns the final text.
+- The Anthropic `/v1/messages` streaming response emits the full result as a single `text_delta` once the CLI finishes (spec-compliant, but not token-by-token).
+- `usage.prompt_tokens` on the OpenAI endpoint includes cache read/creation tokens (matching OpenAI semantics, where `prompt_tokens` covers the whole input).
+
+## Auto-Start as a Service
+
+### Linux (systemd)
+
+See [docs/linux-setup.md](docs/linux-setup.md) for a systemd user unit that starts the proxy on login and restarts it on failure.
+
+### macOS (LaunchAgent)
 
 The proxy can run as a macOS LaunchAgent on port 3456.
 
@@ -225,28 +253,40 @@ launchctl list com.openclaw.claude-max-proxy
 ```
 src/
 ├── types/
-│   ├── claude-cli.ts      # Claude CLI JSON streaming types + type guards
-│   └── openai.ts          # OpenAI API types (including tool calls)
+│   ├── claude-cli.ts        # Claude CLI JSON streaming types + type guards
+│   └── openai.ts            # OpenAI API types (including tool calls)
 ├── adapter/
-│   ├── openai-to-cli.ts   # Convert OpenAI requests → CLI format
-│   └── cli-to-openai.ts   # Convert CLI responses → OpenAI format
+│   ├── openai-to-cli.ts     # Convert OpenAI requests → CLI format
+│   ├── cli-to-openai.ts     # Convert CLI responses → OpenAI format
+│   ├── anthropic-to-cli.ts  # Convert Anthropic Messages requests → CLI format
+│   └── cli-to-anthropic.ts  # Convert CLI responses → Anthropic format
 ├── subprocess/
-│   └── manager.ts         # Claude CLI subprocess + OpenClaw tool mapping
-├── session/
-│   └── manager.ts         # Session ID mapping
+│   └── manager.ts           # Claude CLI subprocess + OpenClaw tool mapping
 ├── server/
-│   ├── index.ts           # Express server setup
-│   ├── routes.ts          # API route handlers
-│   └── standalone.ts      # Entry point
-└── index.ts               # Package exports
+│   ├── index.ts             # Express server setup (CORS/auth middleware)
+│   ├── routes.ts            # API route handlers
+│   └── standalone.ts        # Entry point (`claude-evergreen` bin)
+├── models.ts                # Self-updating model registry (discover/probe/refresh)
+├── unit.test.ts             # Pure-function tests (free, `npm test`)
+├── e2e.test.ts              # Full round-trip tests (burns tokens, `npm run test:e2e`)
+└── index.ts                 # Clawdbot plugin + package exports
 ```
 
 ## Security
 
-- Uses Node.js `spawn()` instead of shell execution to prevent injection attacks
-- No API keys stored or transmitted by this proxy
-- All authentication handled by Claude CLI's secure keychain storage
-- Prompts passed as CLI arguments, not through shell interpretation
+- Uses Node.js `spawn()` instead of shell execution to prevent injection attacks; prompts are passed via stdin, never through a shell
+- Binds to `127.0.0.1` only
+- **CORS is off by default.** The CLI runs with `--dangerously-skip-permissions`, so an exposed proxy means arbitrary prompt → local tool execution. Only set `CLAUDE_PROXY_CORS=1` if you understand that any web page you visit could then call the proxy from your browser.
+- Set `CLAUDE_PROXY_API_KEY` to require a shared secret on `/v1` routes (recommended if anything else on the machine is untrusted)
+- No Anthropic credentials stored or transmitted by this proxy — auth is handled by the Claude CLI's keychain storage
+
+## Testing
+
+```bash
+npm test          # unit tests — pure adapter/registry logic, free and fast
+npm run test:e2e  # end-to-end tests — starts the server and calls the REAL CLI (burns tokens)
+npm run test:all  # both
+```
 
 ## Troubleshooting
 

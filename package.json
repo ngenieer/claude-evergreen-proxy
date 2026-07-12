@@ -12,7 +12,9 @@
     "build": "tsc",
     "dev": "tsc --watch",
     "start": "node dist/server/standalone.js",
-    "test": "node --test dist/**/*.test.js",
+    "test": "node --test dist/unit.test.js",
+    "test:e2e": "node --test dist/e2e.test.js",
+    "test:all": "node --test dist/unit.test.js dist/e2e.test.js",
     "clean": "rm -rf dist",
     "prepublishOnly": "npm run build"
   },
@@ -28,7 +30,10 @@
     "llm",
     "ai"
   ],
-  "author": "Atal Ashutosh",
+  "author": "Manny Lee <admin@sizlon.io>",
+  "contributors": [
+    "Atal Ashutosh (original claude-max-api-proxy)"
+  ],
   "license": "MIT",
   "repository": {
     "type": "git",

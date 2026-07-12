@@ -14,6 +14,7 @@ import { resolveModels } from "../models.js";
 import {
   cliResultToOpenai,
   createDoneChunk,
+  openaiUsage,
 } from "../adapter/cli-to-openai.js";
 import { cliResultToAnthropic, anthropicStreamEvents } from "../adapter/cli-to-anthropic.js";
 import type { OpenAIChatRequest, OpenAIToolCall } from "../types/openai.js";
@@ -109,7 +110,16 @@ export async function handleMessages(req: Request, res: Response): Promise<void>
         resolve();
       });
       subprocess.on("close", (code: number | null) => {
-        if (finalResult) {
+        if (finalResult?.is_error) {
+          // The Anthropic streaming path buffers the full result before writing,
+          // so headers are still unsent here and a real HTTP error can go out.
+          const status = cliErrorStatus(finalResult);
+          const type =
+            status === 404 ? "not_found_error"
+            : status >= 400 && status < 500 ? "invalid_request_error"
+            : "api_error";
+          fail(status, type, finalResult.result || "Claude CLI reported an error");
+        } else if (finalResult) {
           if (stream) {
             res.setHeader("Content-Type", "text/event-stream");
             res.setHeader("Cache-Control", "no-cache");
@@ -144,6 +154,30 @@ export async function handleMessages(req: Request, res: Response): Promise<void>
  */
 function toOpenAICallId(claudeId: string): string {
   return `call_${claudeId.replace("toolu_", "")}`;
+}
+
+/**
+ * The CLI reports failures as a normal result message with is_error=true and
+ * exit code 0 (e.g. an unknown/retired model), so exit codes and stderr can't
+ * be trusted for error detection — this flag is the only reliable signal.
+ * api_error_status carries the upstream HTTP status when the API rejected the
+ * request; anything else (timeouts, execution errors) maps to 502.
+ */
+function cliErrorStatus(result: ClaudeCliResult): number {
+  const s = result.api_error_status;
+  return s && s >= 400 && s < 600 ? s : 502;
+}
+
+/** OpenAI-shaped error body for a failed CLI result. */
+function openaiErrorBody(result: ClaudeCliResult): { error: { message: string; type: string; code: string | null } } {
+  const status = cliErrorStatus(result);
+  return {
+    error: {
+      message: result.result || "Claude CLI reported an error",
+      type: status >= 400 && status < 500 ? "invalid_request_error" : "server_error",
+      code: status === 404 ? "model_not_found" : null,
+    },
+  };
 }
 
 /**
@@ -310,15 +344,19 @@ async function handleStreamingResponse(
     subprocess.on("result", (result: ClaudeCliResult) => {
       isComplete = true;
       if (!res.writableEnded) {
+        if (result.is_error) {
+          // Headers are already sent (SSE), so surface the failure as an error
+          // event in the stream instead of a fake completion.
+          res.write(`data: ${JSON.stringify(openaiErrorBody(result))}\n\n`);
+          res.write("data: [DONE]\n\n");
+          res.end();
+          resolve();
+          return;
+        }
         // Send final done chunk with finish_reason and usage data
         const doneChunk = createDoneChunk(requestId, lastModel);
         if (result.usage) {
-          doneChunk.usage = {
-            prompt_tokens: result.usage.input_tokens || 0,
-            completion_tokens: result.usage.output_tokens || 0,
-            total_tokens:
-              (result.usage.input_tokens || 0) + (result.usage.output_tokens || 0),
-          };
+          doneChunk.usage = openaiUsage(result);
         }
         res.write(`data: ${JSON.stringify(doneChunk)}\n\n`);
         res.write("data: [DONE]\n\n");
@@ -412,7 +450,9 @@ async function handleNonStreamingResponse(
     });
 
     subprocess.on("close", (code: number | null) => {
-      if (finalResult) {
+      if (finalResult?.is_error) {
+        res.status(cliErrorStatus(finalResult)).json(openaiErrorBody(finalResult));
+      } else if (finalResult) {
         res.json(cliResultToOpenai(finalResult, requestId, cliInput.model));
       } else if (!res.headersSent) {
         res.status(500).json({
@@ -452,7 +492,9 @@ async function handleNonStreamingResponse(
  */
 export function handleModels(_req: Request, res: Response): void {
   const now = Math.floor(Date.now() / 1000);
-  // Resolved from CLAUDE_PROXY_MODELS env > models.json (probe-models) > default.
+  // Resolved from CLAUDE_PROXY_MODELS env > models.json (probe-models) >
+  // bare-alias fallback (opus/sonnet/haiku/fable) — never empty, so clients
+  // that require a model list work before first discovery completes.
   const modelIds = resolveModels();
   res.json({
     object: "list",

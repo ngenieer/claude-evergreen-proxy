@@ -58,21 +58,44 @@ function createApp(): Express {
     next();
   });
 
-  // CORS headers for local development
-  app.use((_req: Request, res: Response, next: NextFunction) => {
-    res.setHeader("Access-Control-Allow-Origin", "*");
-    res.setHeader("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
-    res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization");
-    next();
-  });
+  // CORS is OPT-IN (CLAUDE_PROXY_CORS=1). With it on, any web page the user
+  // visits can call this proxy from the browser — and the proxy runs the CLI
+  // with --dangerously-skip-permissions — so wide-open CORS by default would
+  // let arbitrary sites burn the Max subscription and touch local files.
+  if (process.env.CLAUDE_PROXY_CORS === "1") {
+    app.use((_req: Request, res: Response, next: NextFunction) => {
+      res.setHeader("Access-Control-Allow-Origin", "*");
+      res.setHeader("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
+      res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization, x-api-key");
+      next();
+    });
+    app.options("*", (_req: Request, res: Response) => {
+      res.sendStatus(200);
+    });
+  }
 
-  // Handle OPTIONS preflight
-  app.options("*", (_req: Request, res: Response) => {
-    res.sendStatus(200);
-  });
+  // Health stays unauthenticated (liveness checks)
+  app.get("/health", handleHealth);
+
+  // Optional shared-secret auth: set CLAUDE_PROXY_API_KEY to require it on all
+  // /v1 routes, via Authorization: Bearer <key> (OpenAI) or x-api-key (Anthropic).
+  const apiKey = process.env.CLAUDE_PROXY_API_KEY;
+  if (apiKey) {
+    app.use((req: Request, res: Response, next: NextFunction) => {
+      const bearer = (req.headers.authorization || "").replace(/^Bearer\s+/i, "");
+      const header = req.headers["x-api-key"];
+      if (bearer === apiKey || header === apiKey) return next();
+      res.status(401).json({
+        error: {
+          message: "Invalid or missing API key",
+          type: "authentication_error",
+          code: "invalid_api_key",
+        },
+      });
+    });
+  }
 
   // Routes
-  app.get("/health", handleHealth);
   app.get("/v1/models", handleModels);
   app.post("/v1/chat/completions", handleChatCompletions);
   app.post("/v1/messages", handleMessages);
