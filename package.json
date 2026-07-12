@@ -16,6 +16,7 @@
     "test:e2e": "node --test dist/e2e.test.js",
     "test:all": "node --test dist/unit.test.js dist/e2e.test.js",
     "clean": "rm -rf dist",
+    "prepare": "npm run build",
     "prepublishOnly": "npm run build"
   },
   "keywords": [

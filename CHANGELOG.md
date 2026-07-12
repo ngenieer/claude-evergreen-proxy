@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- `prepare` script: the package now builds automatically on install, enabling
+  `npm install -g github:sizlon/claude-evergreen-proxy` (documented in the README).
+
 ## [1.1.0] - 2026-07-12
 
 ### Changed

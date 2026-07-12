@@ -70,16 +70,34 @@ Your App (OpenClaw, Continue.dev, etc.)
 
 ## Installation
 
+### Install globally from GitHub (recommended)
+
+```bash
+npm install -g github:sizlon/claude-evergreen-proxy
+```
+
+This builds automatically on install (via the `prepare` script) and puts the `claude-evergreen` command on your PATH:
+
+```bash
+claude-evergreen           # start on port 3456
+claude-evergreen --help    # all commands and env vars
+```
+
+To pin a release instead of tracking `main`:
+
+```bash
+npm install -g github:sizlon/claude-evergreen-proxy#v1.1.0
+```
+
+### Or clone and build
+
 ```bash
 # Clone the repository
 git clone https://github.com/sizlon/claude-evergreen-proxy.git
 cd claude-evergreen-proxy
 
-# Install dependencies
+# Install dependencies (also builds via the prepare script)
 npm install
-
-# Build
-npm run build
 ```
 
 ## Usage
