@@ -3,11 +3,11 @@
 [![CI](https://github.com/ngenieer/claude-evergreen-proxy/actions/workflows/ci.yml/badge.svg)](https://github.com/ngenieer/claude-evergreen-proxy/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
-> A self-updating fork of [atalovesyou/claude-max-api-proxy](https://github.com/atalovesyou/claude-max-api-proxy) (via [wende](https://github.com/wende/claude-max-api-proxy)). Its model registry **discovers** the CLI's current models, **probes** them, and **refreshes daily** — so the model list stays current with no hardcoded names and no manual updates. (Plus OpenClaw integration and improved streaming from upstream.)
+**Use your Claude Max subscription from any OpenAI- or Anthropic-compatible client — no separate API costs.**
 
-**Use your Claude Max subscription ($200/month) with any OpenAI-compatible client — no separate API costs!**
+The proxy wraps the Claude Code CLI as a local API server exposing both `POST /v1/chat/completions` (OpenAI) and `POST /v1/messages` (Anthropic), so any client speaking either protocol can use your Max subscription instead of paying per API call. Its model registry stays **evergreen**: model ids are discovered from the CLI, probed, and refreshed daily — no hardcoded names, no manual updates.
 
-This proxy wraps the Claude Code CLI as a subprocess and exposes both an **OpenAI-compatible** (`POST /v1/chat/completions`) and an **Anthropic-compatible** (`POST /v1/messages`) HTTP API, so any OpenAI or Anthropic client can use your Claude Max subscription instead of paying per-API-call.
+> Forked from [atalovesyou/claude-max-api-proxy](https://github.com/atalovesyou/claude-max-api-proxy) (via [wende](https://github.com/wende/claude-max-api-proxy)), adding the self-updating model registry, the Anthropic endpoint, OpenClaw integration, and improved streaming.
 
 ## Why This Exists
 
