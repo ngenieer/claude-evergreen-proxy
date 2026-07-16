@@ -247,7 +247,7 @@ response = client.chat.completions.create(
 
 ### Linux (systemd)
 
-See [docs/linux-setup.md](docs/linux-setup.md) for a systemd user unit that starts the proxy on login and restarts it on failure.
+See [docs/linux-setup.md](docs/linux-setup.md) for a systemd user unit that starts the proxy on login and restarts it on failure. If node is managed by **fnm/nvm** (its shims aren't on systemd's PATH), either point `ExecStart` at the resolved node path or use the bundled launcher [`scripts/proxyctl.sh`](scripts/proxyctl.sh) (`start`/`stop`/`restart`/`status`), which resolves node from PATH or fnm.
 
 ### macOS (LaunchAgent)
 

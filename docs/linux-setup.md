@@ -2,6 +2,20 @@
 
 Run the proxy automatically in the background on Linux using a systemd user unit.
 
+> **Using fnm / nvm for Node?** A bare `ExecStart=/usr/bin/env node ...` runs
+> under systemd's minimal PATH and will not find a version-manager-managed node.
+> Either point `ExecStart` at the resolved node binary (`fnm which default` /
+> `nvm which default` — an absolute path under `~/.local/share/fnm/...` or
+> `~/.nvm/...`), or skip systemd and use the bundled launcher
+> [`scripts/proxyctl.sh`](../scripts/proxyctl.sh), which resolves node from PATH
+> or fnm and the Claude CLI from `CLAUDE_BIN`/PATH/`~/.local/bin/claude`:
+>
+> ```bash
+> scripts/proxyctl.sh start [port]     # default 3456, or CLAUDE_PROXY_PORT
+> scripts/proxyctl.sh status
+> scripts/proxyctl.sh stop
+> ```
+
 ## 1. Build the project
 
 ```bash
